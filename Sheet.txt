@@ -1,0 +1,54 @@
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#include <mach-o/dyld.h>
+
+// Подключаем легковесную библиотеку для хуков (Dobby Inline Hooking)
+// Она позволяет на лету менять логику функций игры
+extern "C" void DobbyHook(void *target, void *dvalue, void **original);
+
+// Переменная для сохранения оригинальной функции отрисовки игры
+void (*old_ScreenView_setupAndRender)(void *self, void *ctx);
+
+// Наша кастомная функция, которая заменит оригинальную функцию Minecraft
+void new_ScreenView_setupAndRender(void *self, void *ctx) {
+    // 1. Сначала вызываем оригинальную отрисовку Minecraft, чтобы игра не зависла
+    if (old_ScreenView_setupAndRender) {
+        old_ScreenView_setupAndRender(self, ctx);
+    }
+    
+    // 2. Отрисовываем наш текст "made by - soda" поверх игры
+    // Выполняем это строго в главном потоке интерфейса (Main Thread)
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // Проверяем, нет ли уже нашей надписи на экране, чтобы не создавать миллион копий
+        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        if (![window viewWithTag:1337]) {
+            
+            // Создаем текстовое поле (Label) в верхнем левом углу экрана
+            UILabel *watermark = [[UILabel alloc] initWithFrame:CGRectMake(20, 40, 200, 30)];
+            watermark.text = @"made by - soda";
+            watermark.font = [UIFont fontWithName:@"HelveticaNeue-Bold" size:14.0];
+            watermark.textColor = [UIColor greenColor]; // Зеленый цвет текста
+            watermark.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5]; // Полупрозрачный черный фон
+            watermark.textAlignment = NSTextAlignmentCenter;
+            watermark.layer.cornerRadius = 5;
+            watermark.clipsToBounds = YES;
+            watermark.tag = 1337; // Присваиваем ID, чтобы находить его в системе
+            
+            [window addSubview:watermark];
+        }
+    });
+}
+
+// Этот конструктор выполняется автоматически в момент запуска Minecraft и инжекта dylib
+__attribute__((constructor))
+static void initialize() {
+    NSLog(@"[SodaCheat] Чит успешно загружен в процесс Minecraft!");
+    
+    // Находим адрес функции отрисовки экрана в бинарнике Minecraft.
+    // (В реальном чите для конкретной версии игры этот адрес ищется по сигнатуре или офсетам в IDA Pro/Ghidra)
+    // Для примера используем условный адрес отрисовки графики игры
+    uintptr_t target_address = _dyld_get_image_header(0) + 0x1A2B3C4; // Смещение функции рендера
+    
+    // Подменяем оригинальную функцию на нашу
+    DobbyHook((void *)target_address, (void *)new_ScreenView_setupAndRender, (void **)&old_ScreenView_setupAndRender);
+}
