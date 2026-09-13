@@ -1,0 +1,28 @@
+# .github/workflows/build-macos.yml
+name: Build macOS library
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S cpp-dylib -B cpp-dylib/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build cpp-dylib/build --parallel
+
+      - name: Test
+        run: ctest --test-dir cpp-dylib/build --output-on-failure
+
+      - name: Upload library
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-library
+          path: cpp-dylib/build/*.dylib
